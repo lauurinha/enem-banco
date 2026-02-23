@@ -338,5 +338,3 @@ async function createPDF() {
     pdfMake.createPdf(docDefinition).open();
     pdfMake.createPdf(docDefinition).download(`lista-enem-${pdf_list.length}questoes.pdf`);
 }
-
-fetchQuestion(2020, 157);
