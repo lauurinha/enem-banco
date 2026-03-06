@@ -4,6 +4,7 @@ const p = document.getElementById('question');
 let current_question = {};
 let pdf_list = [];
 let ul = undefined;
+const root = document.documentElement; 
 
 const CORES = {
     rosa:        '#ffb6a9',  
@@ -12,13 +13,17 @@ const CORES = {
     brancoPale:  '#f8edeb',  
     cinzaClaro:  '#e8e8e4',  
     sageClaro:   '#a5a58d', 
-    areia:       '#ece4db',  
+    areia:       '#ffdece',  
     pessego:     '#ffe5d9', 
     laranjaPale: '#ffd7ba', 
     ambar:       '#fec89a',  
     marrom:      '#5C3D2E',  
     marromMedio: '#7B5041',  
 };
+
+Object.keys(CORES).forEach(key => {
+  root.style.setProperty(`--color-${key}`, CORES[key]);
+});
 
 // fonts
 pdfMake.fonts = {
@@ -89,6 +94,12 @@ function randomQuestion() {
 
 function fetchQuestion(year, index) {
     p.textContent = 'Carregando...';
+    if (document.querySelector('.questionBlock') == null){
+        const questionBlock = document.createElement('div')
+        questionBlock.classList.add("questionBlock")
+        questionBlock.appendChild(p)
+        document.body.appendChild(questionBlock)
+    }
     fetch(`https://api.enem.dev/v1/exams/${year}/questions/${index}`, options)
         .then(res => res.json())
         .then(res => {
@@ -100,7 +111,7 @@ function fetchQuestion(year, index) {
                 if (alt.text) {
                     return `<p>${alt.letter.toLowerCase()}) ${alt.text}</p>`;
                 } else {
-                    return `<p>${alt.letter.toLowerCase()}) <img src="${alt.file}" width="auto"></p>`;
+                    return `<p>${alt.letter.toLowerCase()}) <img src="${alt.file}" width="auto" height="50px"></p>`;
                 }
             }).join('');
 
@@ -116,10 +127,16 @@ function fetchQuestion(year, index) {
                 ${alternatives}
             `;
 
-            const btn = document.createElement('button');
-            btn.innerText = 'Adicionar à Lista';
-            btn.addEventListener('click', addToList);
-            p.appendChild(btn);
+
+            const btn = document.createElement('button')
+            const btnAnswer = document.createElement('button')
+            btn.innerText = 'Adicionar à Lista'
+            btnAnswer.innerText = 'Gabarito'
+            btn.addEventListener('click', addToList)
+            btnAnswer.addEventListener('click', showAnswer)
+            btnAnswer.classList.add('btnAnswer')
+            p.appendChild(btn)
+            p.appendChild(btnAnswer)
         })
         .catch(err => console.error(err));
 }
@@ -143,10 +160,12 @@ function addToList() {
         btnCreate.innerHTML = 'Criar Lista PDF';
         btnCreate.addEventListener('click', createPDF);
 
+        divList.classList.add("divList")
+
         divList.appendChild(title);
         divList.appendChild(ul);
         divList.appendChild(btnCreate);
-        document.body.appendChild(divList);
+        document.body.appendChild(divList)
     }
 
     ul.innerHTML = '';
@@ -155,6 +174,13 @@ function addToList() {
         li.textContent = item.title;
         ul.appendChild(li);
     });
+}
+
+function showAnswer(){
+    const questionBlock = document.querySelector('.questionBlock')
+    const gabarito = document.createElement('h5')
+    gabarito.textContent = 'Gabarito: Letra ' + current_question?.correctAlternative.toUpperCase()
+    questionBlock.appendChild(gabarito)
 }
 
 async function createPDF() {
@@ -338,5 +364,3 @@ async function createPDF() {
     pdfMake.createPdf(docDefinition).open();
     pdfMake.createPdf(docDefinition).download(`lista-enem-${pdf_list.length}questoes.pdf`);
 }
-
-fetchQuestion(2020, 157);
