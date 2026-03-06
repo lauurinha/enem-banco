@@ -7,6 +7,15 @@ body {
     flex-direction: column;
     color: var(--color-marromMedio);
 }
+input{
+    width: 70px;
+}
+.singleQuestionDiv, .multipleQuestionsDiv {
+    display: flex;
+    text-align: center;
+    align-items: center;
+    flex-direction: column;
+}
 
 h3{
     color: var(--color-marrom);

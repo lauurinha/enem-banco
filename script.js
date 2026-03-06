@@ -1,8 +1,11 @@
 const options = {method: 'GET'};
 const p = document.getElementById('question');
+const singleQuestionDiv = document.getElementById('singleQuestion')
+const multipleQuestionsDiv = document.getElementById('multipleQuestions')
 
 let current_question = {};
-let pdf_list = [];
+let pdf_list_person = [];
+let pdf_list_rand = [];
 let ul = undefined;
 const root = document.documentElement; 
 
@@ -63,12 +66,22 @@ function getDisciplina(slug) {
 // img url -> base64
 async function urlParaBase64(url) {
     try {
-        const res  = await fetch(url);
+        const res = await fetch(url);
+        if (!res.ok || !res.headers.get('content-type')?.startsWith('image/')) {
+            return null;
+        }
         const blob = await res.blob();
         return await new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror   = reject;
+            reader.onloadend = () => {
+                const result = reader.result;
+                if (result && typeof result === 'string' && result.startsWith('data:image/')) {
+                    resolve(result);
+                } else {
+                    resolve(null);
+                }
+            };
+            reader.onerror = () => resolve(null);
             reader.readAsDataURL(blob);
         });
     } catch {
@@ -105,14 +118,14 @@ function fetchQuestion(year, index) {
         const questionBlock = document.createElement('div')
         questionBlock.classList.add("questionBlock")
         questionBlock.appendChild(p)
-        document.body.appendChild(questionBlock)
+        singleQuestionDiv.appendChild(questionBlock)
     }
     fetch(`https://api.enem.dev/v1/exams/${year}/questions/${index}`, options)
         .then(res => res.json())
         .then(res => {
+            if (res.context?.includes('![]')) res.context = '';
             current_question = res;
 
-            if (res.context?.includes('![]')) res.context = '';
 
             const alternatives = res.alternatives.map(alt => {
                 if (alt.text) {
@@ -150,14 +163,14 @@ function fetchQuestion(year, index) {
 
 
 function addToList() {
-    if (pdf_list.includes(current_question)) {
+    if (pdf_list_person.includes(current_question)) {
         alert('ERRO! Essa questão já está na lista...');
         return;
     }
 
-    pdf_list.push(current_question);
+    pdf_list_person.push(current_question);
 
-    if (pdf_list.length === 1) {
+    if (pdf_list_person.length === 1) {
         const divList  = document.createElement('div');
         ul             = document.createElement('ul');
         const title    = document.createElement('h3');
@@ -165,22 +178,110 @@ function addToList() {
 
         title.textContent  = 'Montar Lista PDF';
         btnCreate.innerHTML = 'Criar Lista PDF';
-        btnCreate.addEventListener('click', createPDF);
+        btnCreate.addEventListener('click', () => createPDF(pdf_list_person));
 
         divList.classList.add("divList")
 
         divList.appendChild(title);
         divList.appendChild(ul);
         divList.appendChild(btnCreate);
-        document.body.appendChild(divList)
+        singleQuestionDiv.appendChild(divList)
     }
 
     ul.innerHTML = '';
-    pdf_list.forEach(item => {
+    pdf_list_person.forEach(item => {
         const li = document.createElement('li');
         li.textContent = item.title;
         ul.appendChild(li);
     });
+}
+
+function getExpectedDiscipline(restricao) {
+    const map = {
+        'ling': 'linguagens',
+        'hum': 'ciencias-humanas',
+        'nat': 'ciencias-natureza',
+        'mat': 'matematica'
+    };
+    return map[restricao] || null;
+}
+
+function fetchQuestionWithRetry(year, question, restricao) {
+    const expectedDiscipline = getExpectedDiscipline(restricao);
+    return fetch(`https://api.enem.dev/v1/exams/${year}/questions/${question}`, options)
+        .then(res => {
+            if (res.ok) {
+                return res.json();
+            } else {
+                // Retry with new random
+                let newQuestion = getRandomIntInclusive(1, 180);
+                let newYear = getRandomIntInclusive(2009, 2023);
+                if (restricao === 'ling') newQuestion = getRandomIntInclusive(1, 45);
+                else if (restricao === 'hum') newQuestion = getRandomIntInclusive(46, 90);
+                else if (restricao === 'nat') newQuestion = getRandomIntInclusive(91, 135);
+                else if (restricao === 'mat') newQuestion = getRandomIntInclusive(136, 180);
+                return fetchQuestionWithRetry(newYear, newQuestion, restricao);
+            }
+        })
+        .then(res => {
+            if (res.context?.includes('![]')) res.context = '';
+            // Check discipline if restricted
+            if (expectedDiscipline && res.discipline !== expectedDiscipline) {
+                // Retry
+                let newQuestion = getRandomIntInclusive(1, 180);
+                let newYear = getRandomIntInclusive(2009, 2023);
+                if (restricao === 'ling') newQuestion = getRandomIntInclusive(1, 45);
+                else if (restricao === 'hum') newQuestion = getRandomIntInclusive(46, 90);
+                else if (restricao === 'nat') newQuestion = getRandomIntInclusive(91, 135);
+                else if (restricao === 'mat') newQuestion = getRandomIntInclusive(136, 180);
+                return fetchQuestionWithRetry(newYear, newQuestion, restricao);
+            }
+            return res;
+        })
+        .catch(err => {
+            console.error(err);
+            return null;
+        });
+}
+
+function getMultipleQuestions() {
+    let inputQt = parseInt(document.getElementById('inputQt').value)
+    const restricao = document.getElementById('areasMultiple').value;
+    let selectedQuestions = []
+    let promises = []
+    pdf_list_rand = [] 
+
+    for (let i = 1; i <= inputQt; i++) {
+        let question = getRandomIntInclusive(1, 180);
+        let year = getRandomIntInclusive(2009, 2023)
+        
+        if (restricao === 'ling') question = getRandomIntInclusive(1, 45);
+        else if (restricao === 'hum') question = getRandomIntInclusive(46, 90);
+        else if (restricao === 'nat') question = getRandomIntInclusive(91, 135);
+        else if (restricao === 'mat') question = getRandomIntInclusive(136, 180);
+        
+        let current_number = {year, question}
+        while (selectedQuestions.includes(current_number)) {
+            question = getRandomIntInclusive(1, 180);
+            year = getRandomIntInclusive(2009, 2023)
+            
+            if (restricao === 'ling') question = getRandomIntInclusive(1, 45);
+            else if (restricao === 'hum') question = getRandomIntInclusive(46, 90);
+            else if (restricao === 'nat') question = getRandomIntInclusive(91, 135);
+            else if (restricao === 'mat') question = getRandomIntInclusive(136, 180);
+
+            current_number = {year, question}
+        }
+        selectedQuestions.push(current_number)
+        let promise = fetchQuestionWithRetry(year, question, restricao)
+            .then(res => {
+                if (res) pdf_list_rand.push(res)
+            });
+        promises.push(promise)
+    }
+    Promise.all(promises).then(() => {
+        createPDF(pdf_list_rand)
+    })
 }
 
 function showAnswer(){
@@ -197,8 +298,15 @@ function showAnswer(){
     questionBlock.appendChild(gabarito)
 }
 
-async function createPDF() {
-
+async function createPDF(pdf_list=pdf_list_person) {
+    console.log('pdf_list:', pdf_list);
+    if (!Array.isArray(pdf_list) || pdf_list.length === 0) {
+        console.error('pdf_list is not a valid array or is empty');
+        return;
+    }
+    const loadingBit = document.createElement('h4')
+    loadingBit.textContent = 'Gerando PDF...'
+    document.body.appendChild(loadingBit)
     // preload images
     const imgsPerQ = await Promise.all(
         pdf_list.map(async (q) => {
@@ -377,4 +485,5 @@ async function createPDF() {
 
     pdfMake.createPdf(docDefinition).open();
     pdfMake.createPdf(docDefinition).download(`lista-enem-${pdf_list.length}questoes.pdf`);
+    loadingBit.remove()
 }
