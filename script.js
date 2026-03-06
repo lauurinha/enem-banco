@@ -94,6 +94,13 @@ function randomQuestion() {
 
 function fetchQuestion(year, index) {
     p.textContent = 'Carregando...';
+    
+
+    const existingGabarito = document.querySelector('.questionBlock h5')
+    if (existingGabarito) {
+        existingGabarito.remove()
+    }
+    
     if (document.querySelector('.questionBlock') == null){
         const questionBlock = document.createElement('div')
         questionBlock.classList.add("questionBlock")
@@ -178,6 +185,13 @@ function addToList() {
 
 function showAnswer(){
     const questionBlock = document.querySelector('.questionBlock')
+    
+
+    const existingGabarito = questionBlock.querySelector('h5')
+    if (existingGabarito) {
+        return
+    }
+    
     const gabarito = document.createElement('h5')
     gabarito.textContent = 'Gabarito: Letra ' + current_question?.correctAlternative.toUpperCase()
     questionBlock.appendChild(gabarito)
