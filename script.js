@@ -326,6 +326,53 @@ async function createPDF(pdf_list=pdf_list_person) {
         })
     );
 
+    // tabela estudos
+    const qtdPorDisciplina = pdf_list.reduce((acumulador, questao) => {
+        const disc = getDisciplina(questao.discipline);
+        acumulador[disc] = (acumulador[disc] || 0) + 1;
+        return acumulador;
+    }, {});
+
+    const linhasTabela = [];
+    const nomesDisciplinas = ['Linguagens e Códigos', 'Ciências Humanas', 'Ciências da Natureza', 'Matemática'];
+
+    nomesDisciplinas.forEach(nome => {
+        if (qtdPorDisciplina[nome]) {
+            linhasTabela.push([
+                { text: nome, bold: true, color: CORES.marromMedio },
+                { text: String(qtdPorDisciplina[nome]), alignment: 'center' },
+                { text: '', margin: [0, 8, 0, 8] }, // Espaço para Acertos
+                { text: '', margin: [0, 8, 0, 8] }, // Espaço para Erros
+                { text: '', margin: [0, 8, 0, 8] }  // Espaço para Aproveitamento
+            ]);
+        }
+    });
+
+    const tabelaDidatica = {
+        absolutePosition: { x: 40, y: 650 }, 
+        stack: [{
+            table: {
+                headerRows: 1,
+                widths: ['*', 40, 50, 50, 80],
+                body: [
+                    ['Disciplina', 'Total', 'Acertos', 'Erros', 'Aprov. (%)'].map(txt => ({
+                        text: txt, bold: true, color: CORES.marrom,
+                        fillColor: CORES.laranjaPale, alignment: 'center'
+                    })),
+                    ...linhasTabela,
+                    [
+                        { text: 'TOTAL GERAL', bold: true, color: CORES.marrom, fillColor: CORES.pele },
+                        { text: String(pdf_list.length), bold: true, alignment: 'center', fillColor: CORES.pele },
+                        { text: '', fillColor: CORES.pele },
+                        { text: '', fillColor: CORES.pele },
+                        { text: '', fillColor: CORES.pele }
+                    ]
+                ]
+            },
+            layout: 'lightHorizontalLines'
+        }]
+    };
+
     const questoes = [];
 
     pdf_list.forEach((q, idx) => {
@@ -334,51 +381,45 @@ async function createPDF(pdf_list=pdf_list_person) {
 
 
         questoes.push({
-            text: `Questão ${idx + 1}  ·  ${q.title}  ·  ${disciplina}`,
-            style: 'cabecalhoQuestao',
-            margin: [0, 20, 0, 8]
-        });
-
-
-        if (q.context?.trim()) {
-            questoes.push({ text: q.context, style: 'corpo', margin: [0, 0, 0, 8] });
-        }
-
-        // imgs enunciado
-        imgs.files.forEach(base64 => {
-            if (base64) {
-                questoes.push({ image: base64, fit: [240, 150], margin: [0, 0, 0, 8] });
-            }
-        });
-
-
-        if (q.alternativesIntroduction?.trim()) {
-            questoes.push({ text: q.alternativesIntroduction, style: 'corpo', margin: [0, 0, 0, 8] });
-        }
-
-        q.alternatives.forEach((alt, i) => {
-            const fundoAlt = i % 2 === 0 ? CORES.brancoPale : CORES.pessego;
-            const base64Alt = imgs.altFiles[i];
-
-            if (base64Alt) {
-                // c/ img
-                questoes.push({
-                    columns: [
-                        { text: `${alt.letter.toUpperCase()})`, style: 'letraAlt', width: 24 },
-                        { image: base64Alt, fit: [110, 50] }
-                    ],
-                    fillColor: fundoAlt,
-                    margin: [8, 4, 8, 4]
-                });
-            } else {
-                // s/ img
-                questoes.push({
-                    text: `${alt.letter.toUpperCase()})  ${alt.text}`,
-                    style: 'alternativa',
-                    fillColor: fundoAlt,
-                    margin: [8, 5, 8, 5]
-                });
-            }
+            stack: [
+                {
+                    text: `Questão ${idx + 1}  ·  ${q.title}  ·  ${disciplina}`,
+                    style: 'cabecalhoQuestao',
+                    margin: [0, 10, 0, 4] // Margens reduzidas
+                },
+                q.context?.trim() ? { text: q.context, style: 'corpo', margin: [0, 0, 0, 5] } : null,
+                ...imgs.files.map(base64 => base64 ? { image: base64, fit: [200, 120], margin: [0, 0, 0, 5], alignment: 'center' } : null),
+                q.alternativesIntroduction?.trim() ? { text: q.alternativesIntroduction, style: 'corpo', margin: [0, 0, 0, 5] } : null,
+                ...q.alternatives.map((alt, i) => {
+                    const base64Alt = imgs.altFiles[i];
+                    const content = base64Alt 
+                        ? { columns: [{ text: `${alt.letter.toUpperCase()})`, style: 'letraAlt', width: 20 }, { image: base64Alt, fit: [100, 40] }] }
+                        : { text: `${alt.letter.toUpperCase()})  ${alt.text}`, style: 'alternativa' };
+                    
+                    return {
+                        ...content,
+                        fillColor: i % 2 === 0 ? CORES.brancoPale : CORES.pessego,
+                        margin: [5, 2, 5, 2]
+                    };
+                }),
+                // Tracker de desempenho compacto
+                {
+                    margin: [0, 5, 0, 10],
+                    table: {
+                        widths: ['*'],
+                        body: [[
+                            {
+                                columns: [
+                                    { text: 'Resultado: [ ] O [ ] X', width: 85, bold: true, fontSize: 9 },
+                                    { text: 'Motivo: [ ]Atenção [ ]Interp. [ ]Teoria [ ]Cálculo [ ]Chute', width: '*', fontSize: 8 }
+                                ]
+                            }
+                        ]]
+                    },
+                    layout: { hLineColor: () => CORES.ambar, vLineColor: () => CORES.ambar }
+                }
+            ],
+            
         });
 
         // separar questões
@@ -429,6 +470,54 @@ async function createPDF(pdf_list=pdf_list_person) {
         }
     ];
 
+    // espaço didático
+    const corpoTabelaAnalise = [
+        [
+            { text: 'Nº Q', style: 'tableHeader' },
+            { text: 'Assunto', style: 'tableHeader' },
+            { text: 'Motivo', style: 'tableHeader' },
+            { text: 'Ação', style: 'tableHeader' }
+        ]
+    ];
+
+    for (let i = 0; i < 15; i++) {
+        corpoTabelaAnalise.push([
+            { text: ' ', margin: [0, 12, 0, 12] }, // coluna Nº Q
+            { text: ' ', margin: [0, 12, 0, 12] }, // coluna assunto
+            { text: ' ', margin: [0, 12, 0, 12] }, // coluna motivo
+            { text: ' ', margin: [0, 12, 0, 12] }  // coluna ação
+        ]);
+    }
+
+    const espacoDidatico = [
+        { text: '', pageBreak: 'before' },
+        { 
+            columns: [
+                { text: '# Plano de Ação e Melhoria', style: 'tituloPagina' },
+                { text: 'Data: ____/____/____', alignment: 'right', color: CORES.marromMedio, margin: [0, 5, 0, 0] }
+            ]
+        },
+        { 
+            text: 'Identifique seus padrões de erro para ajustar seu de conhecimento.', 
+            style: 'aviso', margin: [0, 5, 0, 15] 
+        },
+        {
+            table: {
+                headerRows: 1,
+                widths: [35, 130, 130, '*'],
+                body: corpoTabelaAnalise
+            },
+            layout: {
+                hLineWidth: (i, node) => (i === 0 || i === node.table.body.length) ? 2 : 1,
+                vLineWidth: (i, node) => (i === 0 || i === node.table.widths.length) ? 2 : 1,
+                hLineColor: () => CORES.marromMedio,
+                vLineColor: () => CORES.marromMedio,
+                paddingLeft: () => 8,
+                paddingRight: () => 8
+            }
+        }
+    ];
+
     const docDefinition = {
         pageSize:    'A4',
         pageMargins: [40, 55, 40, 45],
@@ -452,6 +541,8 @@ async function createPDF(pdf_list=pdf_list_person) {
                 text: `${pdf_list.length} questão(ões)  ·  ${new Date().toLocaleDateString('pt-BR')}`,
                 style: 'capaData'
             },
+
+            tabelaDidatica,
             { text: '', pageBreak: 'after' },
 
             // seçao de questoes
@@ -459,7 +550,10 @@ async function createPDF(pdf_list=pdf_list_person) {
             ...questoes,
 
             // gabarito
-            ...gabarito
+            ...gabarito,
+
+            // espaço didatico
+            ...espacoDidatico
         ],
 
         styles: {
